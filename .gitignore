@@ -31,7 +31,6 @@ local.properties
 *.hprof
 .cxx/
 
-
 # dependencies
 node_modules/
 npm-debug.log

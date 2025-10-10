@@ -17,6 +17,9 @@ export default function WebViewScreen() {
   // 안전 영역 인셋 가져오기
   const insets = useSafeAreaInsets();
 
+  const [canGoBack, setCanGoBack] = useState(false);
+  const onNavChange = (nav: WebViewNavigation) => setCanGoBack(nav.canGoBack);
+
 
   // 플랫폼별 userAgent 설정
   const customUserAgent = Platform.select({
@@ -46,8 +49,6 @@ export default function WebViewScreen() {
       await MediaLibrary.requestPermissionsAsync();
 
       if (Platform.OS === 'android') {
-        await Notifications.requestPermissionsAsync();
-        // 안드 채널 생성 (중요)
         await Notifications.setNotificationChannelAsync('default', {
           name: 'Default',
           importance: Notifications.AndroidImportance.DEFAULT,
@@ -63,16 +64,15 @@ export default function WebViewScreen() {
   useFocusEffect(
     React.useCallback(() => {
       const onBackPress = () => {
-        if (webViewRef.current) {
+        if (webViewRef.current && canGoBack) {
           webViewRef.current.goBack();
           return true;
         }
-        return false;
+        return false; // 루트면 기본 동작(앱 종료)
       };
-
-      const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-      return () => backHandler.remove();
-    }, [])
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }, [canGoBack])
   );
 
   // 웹뷰에서 메시지 수신 처리
@@ -100,108 +100,33 @@ export default function WebViewScreen() {
     true;
   `;
 
+
+  const openExternal = async (url: string) => {
+    try {
+      await Linking.openURL(url);
+    } catch {
+      // intent:// → https fallback
+      if (url.startsWith('intent://')) {
+        const https = url.replace(/^intent:\/\//, 'https://');
+        try { await Linking.openURL(https); } catch {}
+      }
+      // market:// → 웹 스토어
+      if (url.startsWith('market://')) {
+        const web = url.replace(/^market:\/\//, 'https://play.google.com/store/');
+        try { await Linking.openURL(web); } catch {}
+      }
+    }
+  };
   // 웹뷰에서 외부 URL을 처리하는 함수
-  const handleShouldStartLoad = (request: WebViewNavigation) => {
-    const { url } = request;
-    console.log('URL 요청:', url); // 디버깅용 로그
-    
-    // 기본 URL 스킴 처리 (tel, mailto, sms 등)
-    if (url.startsWith('tel:') || 
-        url.startsWith('mailto:') || 
-        url.startsWith('sms:')) {
-      Linking.openURL(url);
-      return false; // 웹뷰에서는 처리하지 않음
+  const handleShouldStartLoad = (req: WebViewNavigation) => {
+    const { url = '' } = req;
+
+    const external = /^(tel:|mailto:|sms:|intent:|market:|kakaotalk:|kakaolink:|supertoss:|tdirectsdk:|ispmobile:|kftc-bankpay:|naversearchapp:|navercafe:)/i;
+    if (external.test(url) || url.includes('play.google.com/store')) {
+      openExternal(url);
+      return false;
     }
-    
-    // 앱 스킴 처리 (특정 앱으로 연결되는 URL)
-    if (url.startsWith('market://') || 
-        url.startsWith('intent://') || 
-        url.includes('play.google.com/store')) {
-      Linking.openURL(url);
-      return false; // 웹뷰에서는 처리하지 않음
-    }
-    
-    // 카카오 로그인 처리
-    if (url.includes('kakao.com/oauth') || 
-        url.includes('kakaoapi.com') ||
-        url.startsWith('kakaolink://') || 
-        url.startsWith('kakaotalk://')) {
-      
-      // kakaolink, kakaotalk 스킴은 앱으로 열기
-      if (url.startsWith('kakaolink://') || url.startsWith('kakaotalk://')) {
-        Linking.openURL(url).catch(() => {
-          // 앱이 없는 경우 웹으로 대체
-          console.log('카카오 앱을 열지 못했습니다.');
-        });
-        return false;
-      }
-      
-      // 나머지 카카오 OAuth 처리는 웹뷰 내에서
-      return true;
-    }
-    
-    // 네이버 로그인 처리
-    if (url.includes('naver.com/oauth') || 
-        url.includes('nid.naver.com') ||
-        url.startsWith('naversearchapp://') || 
-        url.startsWith('navercafe://')) {
-      
-      // 네이버 앱 스킴은 앱으로 열기
-      if (url.startsWith('naversearchapp://') || url.startsWith('navercafe://')) {
-        Linking.openURL(url).catch(() => {
-          console.log('네이버 앱을 열지 못했습니다.');
-        });
-        return false;
-      }
-      
-      // 나머지 네이버 OAuth 처리는 웹뷰 내에서
-      return true;
-    }
-    
-    // 포트원/토스페이 결제 처리
-    if (url.includes('tosspayments.com') || 
-        url.includes('portone.io') ||
-        url.includes('iamport.kr') ||
-        url.startsWith('supertoss://') ||
-        url.startsWith('tdirectsdk://') ||
-        url.startsWith('ispmobile://')) {
-      
-      // 결제 앱 스킴은 외부 앱으로 열기
-      if (url.startsWith('supertoss://') || 
-          url.startsWith('tdirectsdk://') || 
-          url.startsWith('ispmobile://') ||
-          url.startsWith('kftc-bankpay://')) {
-        Linking.openURL(url).catch(() => {
-          console.log('결제 앱을 열지 못했습니다.');
-        });
-        return false;
-      }
-      
-      // 나머지 결제 프로세스는 웹뷰 내에서
-      return true;
-    }
-    
-    // HTTP/HTTPS URL은 기본적으로 웹뷰에서 처리
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      // 현재 도메인 체크 (필요한 경우)
-      const baseUrl = 'selftest.webin.co.kr';
-      
-      // 현재 도메인이 아닌 외부 링크를 어떻게 처리할지 결정
-      // 여기서는 모두 웹뷰로 열도록 설정
-      return true;
-    }
-    
-    // 기타 알 수 없는 스킴은 시스템에 위임 (앱 실행 시도)
-    Linking.canOpenURL(url).then(supported => {
-      if (supported) {
-        Linking.openURL(url);
-      } else {
-        console.log('URL을 처리할 수 없습니다:', url);
-      }
-    });
-    
-    // 기본적으로 웹뷰에서 열지 않음
-    return false;
+    return true;
   };
 
   return (
@@ -237,6 +162,8 @@ export default function WebViewScreen() {
           onMessage={handleMessage}
           injectedJavaScript={INJECTED_JAVASCRIPT}
           onShouldStartLoadWithRequest={handleShouldStartLoad}
+          onNavigationStateChange={onNavChange}
+          setSupportMultipleWindows={false}
           
           javaScriptEnabled={true}
           domStorageEnabled={true}
@@ -250,6 +177,22 @@ export default function WebViewScreen() {
           sharedCookiesEnabled={true}
           thirdPartyCookiesEnabled={true}
           mixedContentMode="compatibility"
+
+          onFileDownload={({ nativeEvent }) => {
+            const { downloadUrl } = nativeEvent;
+            Linking.openURL(downloadUrl).catch(() => {});
+          }}
+
+          pullToRefreshEnabled={true}
+          overScrollMode="always" 
+
+          onRenderProcessGone={() => {
+            // 가벼운 복구: 동일 URL 재로딩
+            webViewRef.current?.reload();
+          }}
+          onHttpError={(e) => {
+            console.log('HTTP error', e.nativeEvent.statusCode, e.nativeEvent.description);
+          }}
         />
       )}
       
@@ -265,7 +208,7 @@ export default function WebViewScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#333',
   },
   webview: {
     flex: 1,
