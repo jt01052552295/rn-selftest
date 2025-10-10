@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "SelfTestApp",
-    "slug": "SelfTestApp",
+    "name": "자가진단개발용",
+    "slug": "selftestapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -9,7 +9,12 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+       "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "지도를 위해 현재 위치를 사용합니다.",
+        "NSCameraUsageDescription": "녹음/촬영 기능을 위해 카메라 접근이 필요합니다.",
+        "NSMicrophoneUsageDescription": "녹음 기능을 위해 마이크 접근이 필요합니다."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +24,16 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "kr.co.webin.selftest.dev",
+      "permissions": [
+        "INTERNET",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "RECORD_AUDIO",
+        "CAMERA"
+      ]
     },
     "web": {
       "output": "static",
