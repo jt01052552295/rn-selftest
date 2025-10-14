@@ -28,7 +28,7 @@ import {
   initFcm,
   listenForegroundMessages,
 } from '../src/push/fcm';
-import { showLocalNotification } from '../src/push/notify';
+import { showLocalNotification, initNotifications } from '../src/push/notify';
 
 export default function WebViewScreen() {
   const [isLoading, setIsLoading] = useState(true);
@@ -115,6 +115,14 @@ export default function WebViewScreen() {
       console.log('Auto-login URL set:', url, fcmToken);
     }
   }, [fcmToken, isLoggedIn]);
+
+  // 기존 useEffect와 별도로 추가
+  useEffect(() => {
+    // expo-notifications 초기화
+    initNotifications().then((granted) => {
+      console.log('Notifications permission:', granted ? 'granted' : 'denied');
+    });
+  }, []);
 
   const [webViewSource, setWebViewSource] = useState({
     uri: 'https://selftest.webin.co.kr',

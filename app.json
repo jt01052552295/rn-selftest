@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "selftestapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -60,7 +60,7 @@
         "expo-build-properties",
         {
           "android": {
-            "minSdkVersion": 21,
+            "minSdkVersion": 24,
             "targetSdkVersion": 34,
             "compileSdkVersion": 36
           }

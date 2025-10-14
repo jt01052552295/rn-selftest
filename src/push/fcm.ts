@@ -1,46 +1,70 @@
-// src/push/fcm.ts
-import { getApp } from '@react-native-firebase/app';
-import {
-  AuthorizationStatus,
-  deleteToken as deleteTokenMod,
-  getMessaging,
-  getToken as getTokenMod,
-  onMessage as onMessageMod,
-  onTokenRefresh as onTokenRefreshMod,
-  requestPermission,
-} from '@react-native-firebase/messaging';
+import * as Notifications from 'expo-notifications';
+import messaging from '@react-native-firebase/messaging';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const app = getApp();
-const m = getMessaging(app);
+const FCM_TOKEN_KEY = 'fcm_token';
 
-export async function requestNotifPermission() {
-  const status = await requestPermission(m);
-  return (
-    status === AuthorizationStatus.AUTHORIZED ||
-    status === AuthorizationStatus.PROVISIONAL
-  );
-}
+/**
+ * FCM 초기화 및 토큰 관리
+ */
+export async function initFcm(
+  onTokenReceived: (token: string) => Promise<void>,
+): Promise<() => void> {
+  // 알림 권한 요청
+  const authStatus = await messaging().requestPermission();
+  const enabled =
+    authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+    authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
-export async function initFcm(onToken: (t: string) => void) {
-  const ok = await requestNotifPermission();
-  if (!ok) {
-    console.log('알림 권한 미허용');
+  if (!enabled) {
+    console.log('FCM 권한이 없습니다.');
     return () => {};
   }
-  const token = await getTokenMod(m);
-  if (token) onToken(token);
-  const unsub = onTokenRefreshMod(m, onToken);
-  return () => unsub();
+
+  // 기존 토큰 확인
+  const savedToken = await AsyncStorage.getItem(FCM_TOKEN_KEY);
+  if (savedToken) {
+    await onTokenReceived(savedToken);
+  }
+
+  // 새 토큰 발급 이벤트
+  const unsubscribe = messaging().onTokenRefresh(async (token) => {
+    console.log('FCM 토큰 갱신:', token);
+    await AsyncStorage.setItem(FCM_TOKEN_KEY, token);
+    await onTokenReceived(token);
+  });
+
+  // 토큰 가져오기 (없으면 생성)
+  const token = await messaging().getToken();
+  console.log('FCM 토큰:', token);
+  await AsyncStorage.setItem(FCM_TOKEN_KEY, token);
+  await onTokenReceived(token);
+
+  return unsubscribe;
 }
 
+/**
+ * 포그라운드 메시지 수신 리스너
+ */
 export function listenForegroundMessages(
-  handler: (msg: any) => Promise<void> | void,
-) {
-  return onMessageMod(m, handler);
+  onMessage: (message: any) => Promise<void>,
+): () => void {
+  return messaging().onMessage(async (remoteMessage) => {
+    console.log('포그라운드 메시지 수신:', remoteMessage);
+    await onMessage(remoteMessage);
+  });
 }
 
-export async function deleteDeviceToken() {
+/**
+ * 단말기에 저장된 FCM 토큰 삭제
+ */
+export async function deleteDeviceToken(): Promise<void> {
   try {
-    await deleteTokenMod(m);
-  } catch {}
+    await AsyncStorage.removeItem(FCM_TOKEN_KEY);
+    // Firebase의 토큰 삭제는 불필요할 수 있지만,
+    // 완전한 로그아웃을 위해 포함
+    await messaging().deleteToken();
+  } catch (error) {
+    console.error('FCM 토큰 삭제 실패:', error);
+  }
 }
