@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFocusEffect } from '@react-navigation/native';
 import { Audio } from 'expo-av';
 import * as Location from 'expo-location';
@@ -416,7 +417,7 @@ export default function WebViewScreen() {
                   webViewRef.current?.goBack();
                 }}
               >
-                <Text style={styles.backButtonText}>← 뒤로</Text>
+                <Ionicons name="chevron-back" size={24} color="#fff" />
               </TouchableOpacity>
             )}
         </>
@@ -463,15 +464,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     left: 10,
-    backgroundColor: '#11412D',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 16,
+    backgroundColor: '#555',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
     zIndex: 1000,
-  },
-  backButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
+    elevation: 4, // Android 그림자
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 2 },
   },
 });
