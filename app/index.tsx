@@ -3,7 +3,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Audio } from 'expo-av';
 import * as Location from 'expo-location';
 import * as MediaLibrary from 'expo-media-library';
-import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -23,6 +22,13 @@ import {
   WebViewMessageEvent,
   WebViewNavigation,
 } from 'react-native-webview';
+import { registerFcmToken, revokeFcmToken } from '../src/api/fcm';
+import {
+  deleteDeviceToken,
+  initFcm,
+  listenForegroundMessages,
+} from '../src/push/fcm';
+import { showLocalNotification } from '../src/push/notify';
 
 export default function WebViewScreen() {
   const [isLoading, setIsLoading] = useState(true);
@@ -30,8 +36,20 @@ export default function WebViewScreen() {
   const webViewRef = useRef<WebView>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
+  const autoLoginFiredRef = useRef(false);
+  const [fcmToken, setFcmToken] = useState<string | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+
   // 안전 영역 인셋 가져오기
   const insets = useSafeAreaInsets();
+
+  // 플랫폼별 userAgent 설정
+  const customUserAgent = Platform.select({
+    ios: 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1',
+    android:
+      'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.104 Mobile Safari/537.36',
+    default: 'Mozilla/5.0 Mobile',
+  });
 
   // 키보드 이벤트 리스너 설정
   useEffect(() => {
@@ -53,6 +71,50 @@ export default function WebViewScreen() {
       keyboardDidHideListener.remove();
     };
   }, []);
+
+  // fcm 등록
+  useEffect(() => {
+    let unsubRotate: null | (() => void) = null;
+    let unsubFG: null | (() => void) = null;
+
+    (async () => {
+      unsubRotate = await initFcm(async (token) => {
+        setFcmToken(token);
+        if (isLoggedIn) {
+          try {
+            const r = await registerFcmToken(token);
+            console.log('FCM register (init/rotate):', r);
+          } catch (e) {
+            console.log('FCM register error:', e);
+          }
+        }
+      });
+
+      // 포그라운드 수신
+      unsubFG = listenForegroundMessages(async (msg) => {
+        const title = msg.notification?.title || msg.data?.title || '알림';
+        const body = msg.notification?.body || msg.data?.body || '';
+        console.log('FG message:', msg);
+        await showLocalNotification(title, body, msg.data);
+      });
+    })();
+
+    return () => {
+      if (typeof unsubRotate === 'function') unsubRotate();
+      if (typeof unsubFG === 'function') unsubFG();
+    };
+  }, [isLoggedIn]);
+
+  // 토큰으로 자동로그인 페이지 호출
+  useEffect(() => {
+    if (!isLoggedIn && fcmToken && !autoLoginFiredRef.current) {
+      const url = `https://selftest.webin.co.kr/api/fcm/auto_login.php?fcm_token=${encodeURIComponent(
+        fcmToken,
+      )}`;
+      setWebViewSource({ uri: url }); // 네가 이미 가진 함수/상태
+      console.log('Auto-login URL set:', url, fcmToken);
+    }
+  }, [fcmToken, isLoggedIn]);
 
   const [webViewSource, setWebViewSource] = useState({
     uri: 'https://selftest.webin.co.kr',
@@ -76,7 +138,11 @@ export default function WebViewScreen() {
     return (
       url.includes('nid.naver.com') ||
       url.includes('accounts.kakao.com') ||
-      url.includes('kauth.kakao.com')
+      url.includes('kauth.kakao.com') ||
+      url.includes('accounts.google.com') || // 구글 로그인
+      url.includes('appleid.apple.com') || // 애플 로그인
+      url.includes('idmsa.apple.com') || // 애플 인증 관련
+      url.includes('auth.apple.com')
     );
   };
 
@@ -112,13 +178,6 @@ export default function WebViewScreen() {
         });
 
         await MediaLibrary.requestPermissionsAsync();
-
-        if (Platform.OS === 'android') {
-          await Notifications.setNotificationChannelAsync('default', {
-            name: 'Default',
-            importance: Notifications.AndroidImportance.DEFAULT,
-          });
-        }
       } catch (e) {
         console.log('권한 요청 오류:', e);
       }
@@ -147,23 +206,43 @@ export default function WebViewScreen() {
   const handleMessage = (event: WebViewMessageEvent) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
+      console.log('웹에서 메시지 수신:', data);
 
       if (data.type === 'CONSOLE_LOG') {
         console.log('웹 콘솔:', data.log);
         return;
       } else if (data.type === 'CONSOLE_ERROR') {
-        console.error('웹 콘솔 에러:', data.log);
+        // console.error('웹 콘솔 에러:', data.log);
         return;
       } else if (data.type === 'JS_ERROR') {
         console.error('웹 JS 에러:', data.error);
         return;
       }
 
-      console.log('웹에서 메시지 수신:', data);
-
       switch (data.type) {
         case 'OPEN_URL':
           if (data.url) Linking.openURL(data.url);
+          break;
+        case 'LOGIN_OK':
+          setIsLoggedIn(true);
+          if (fcmToken) {
+            registerFcmToken(fcmToken)
+              .then((r) => console.log('FCM register after LOGIN_OK:', r))
+              .catch((e) => console.log('FCM register error:', e));
+          }
+          break;
+
+        case 'LOGOUT_OK':
+          setIsLoggedIn(false);
+          if (fcmToken) {
+            console.log('revokeFcmToken', fcmToken);
+            revokeFcmToken(fcmToken)
+              .then((r) => console.log('FCM revoke after LOGOUT_OK:', r))
+              .catch((e) => console.log('FCM revoke error:', e));
+            // 단말 FCM 토큰 삭제(모듈러 헬퍼)
+            deleteDeviceToken().catch(() => {});
+            setFcmToken(null);
+          }
           break;
       }
     } catch (err) {
@@ -343,6 +422,7 @@ export default function WebViewScreen() {
             ref={webViewRef}
             source={webViewSource}
             style={styles.webview}
+            userAgent={customUserAgent}
             onLoadStart={() => setIsLoading(true)}
             onLoad={() => setIsLoading(false)}
             onLoadEnd={() => setIsLoading(false)}

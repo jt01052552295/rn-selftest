@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "957374729039",
+    "project_id": "selftest-a311d",
+    "storage_bucket": "selftest-a311d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:957374729039:android:6727a9a247e6959162133a",
+        "android_client_info": {
+          "package_name": "kr.co.webin.selftest.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCDUhqJ-r-1rG4cdOVEMuSP8I-YJBU-M-k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

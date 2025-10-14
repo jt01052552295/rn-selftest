@@ -7,14 +7,15 @@
     "icon": "./assets/images/icon.png",
     "scheme": "selftestapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "지도를 위해 현재 위치를 사용합니다.",
         "NSCameraUsageDescription": "녹음/촬영 기능을 위해 카메라 접근이 필요합니다.",
         "NSMicrophoneUsageDescription": "녹음 기능을 위해 마이크 접근이 필요합니다."
-      }
+      },
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "adaptiveIcon": {
@@ -33,7 +34,8 @@
         "POST_NOTIFICATIONS",
         "RECORD_AUDIO",
         "CAMERA"
-      ]
+      ],
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static",
@@ -52,8 +54,20 @@
             "backgroundColor": "#ffffff"
           }
         }
+      ],
+      "@react-native-firebase/app",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 21,
+            "targetSdkVersion": 34,
+            "compileSdkVersion": 36
+          }
+        }
       ]
     ],
+
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
