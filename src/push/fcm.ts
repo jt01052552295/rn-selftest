@@ -1,6 +1,5 @@
-import * as Notifications from 'expo-notifications';
-import messaging from '@react-native-firebase/messaging';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import messaging from '@react-native-firebase/messaging';
 
 const FCM_TOKEN_KEY = 'fcm_token';
 
@@ -46,12 +45,11 @@ export async function initFcm(
 /**
  * 포그라운드 메시지 수신 리스너
  */
-export function listenForegroundMessages(
-  onMessage: (message: any) => Promise<void>,
-): () => void {
+export function listenForegroundMessages(callback: (message: any) => void) {
   return messaging().onMessage(async (remoteMessage) => {
-    console.log('포그라운드 메시지 수신:', remoteMessage);
-    await onMessage(remoteMessage);
+    console.log('포그라운드에서 메시지 수신:', remoteMessage);
+    callback(remoteMessage);
+    return remoteMessage;
   });
 }
 

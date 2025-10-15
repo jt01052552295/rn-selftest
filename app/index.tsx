@@ -3,6 +3,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Audio } from 'expo-av';
 import * as Location from 'expo-location';
 import * as MediaLibrary from 'expo-media-library';
+import { useLastNotificationResponse } from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -28,7 +29,13 @@ import {
   initFcm,
   listenForegroundMessages,
 } from '../src/push/fcm';
-import { showLocalNotification, initNotifications } from '../src/push/notify';
+import {
+  clearLastNotificationUrl,
+  getLastNotificationUrl,
+  initNotifications,
+  setUrlChangeHandler,
+  showLocalNotification,
+} from '../src/push/notify';
 
 export default function WebViewScreen() {
   const [isLoading, setIsLoading] = useState(true);
@@ -40,6 +47,8 @@ export default function WebViewScreen() {
   const [fcmToken, setFcmToken] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
 
+  const lastNotificationResponse = useLastNotificationResponse();
+
   // 안전 영역 인셋 가져오기
   const insets = useSafeAreaInsets();
 
@@ -50,6 +59,42 @@ export default function WebViewScreen() {
       'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.104 Mobile Safari/537.36',
     default: 'Mozilla/5.0 Mobile',
   });
+
+  const navigateToUrl = (url: string) => {
+    console.log('WebView URL 변경 시도:', url);
+
+    // URL이 유효한지 확인
+    if (!url || typeof url !== 'string' || !url.startsWith('http')) {
+      console.error('유효하지 않은 URL:', url);
+      return;
+    }
+
+    // 1. 상태 업데이트로 URL 변경
+    setWebViewSource({ uri: url });
+
+    // 2. WebView ref를 통해 직접 이동 시도 (더 확실한 방법)
+    if (webViewRef.current) {
+      console.log('WebView ref를 통해 직접 URL 변경 시도');
+
+      // JavaScript를 통해 직접 location.href 변경 시도
+      const jsCode = `
+      (function() {
+        console.log("WebView 내부에서 URL 변경 시도: ${url}");
+        window.location.href = "${url}";
+        true;
+      })();
+    `;
+      webViewRef.current.injectJavaScript(jsCode);
+
+      // 필요하다면 일정 시간 후 리로드 시도
+      setTimeout(() => {
+        if (webViewRef.current) {
+          console.log('WebView 리로드 시도');
+          webViewRef.current.reload();
+        }
+      }, 300);
+    }
+  };
 
   // 키보드 이벤트 리스너 설정
   useEffect(() => {
@@ -116,12 +161,70 @@ export default function WebViewScreen() {
     }
   }, [fcmToken, isLoggedIn]);
 
-  // 기존 useEffect와 별도로 추가
+  // lastNotificationResponse 변경 감지 및 처리 부분 수정
   useEffect(() => {
-    // expo-notifications 초기화
-    initNotifications().then((granted) => {
-      console.log('Notifications permission:', granted ? 'granted' : 'denied');
-    });
+    if (lastNotificationResponse) {
+      try {
+        const data = lastNotificationResponse.notification.request.content.data;
+        console.log('마지막 알림 응답 데이터:', data);
+
+        if (data && data.targetUrl && typeof data.targetUrl === 'string') {
+          console.log('마지막 알림의 targetUrl로 이동:', data.targetUrl);
+
+          // 기존 setWebViewSource 대신 새로운 함수 사용
+          navigateToUrl(data.targetUrl);
+        }
+      } catch (error) {
+        console.error('알림 데이터 처리 중 오류:', error);
+      }
+    }
+  }, [lastNotificationResponse]);
+
+  // 알림 초기화 및 URL 핸들러 설정
+  useEffect(() => {
+    let notificationSubscription: any = null;
+
+    // 앱 초기화 및 알림 설정
+    async function setupApp() {
+      try {
+        console.log('앱 초기화 시작');
+
+        // URL 변경 핸들러 설정 (알림 클릭 시 WebView URL 변경용)
+        setUrlChangeHandler((url) => {
+          console.log('알림에서 WebView URL 변경 요청:', url);
+          navigateToUrl(url);
+        });
+
+        // expo-notifications 초기화 - 알림 응답 리스너 등록
+        const result = await initNotifications();
+        notificationSubscription = result.subscription;
+
+        // 마지막으로 저장된 URL이 있는지 확인 (백그라운드에서 앱이 시작된 경우)
+        const lastUrl = await getLastNotificationUrl();
+        if (lastUrl) {
+          console.log('저장된 알림 URL로 이동:', lastUrl);
+          setWebViewSource({ uri: lastUrl });
+          await clearLastNotificationUrl();
+        }
+
+        console.log('앱 초기화 완료');
+      } catch (error) {
+        console.error('앱 초기화 중 오류:', error);
+      }
+    }
+
+    // 앱 초기화 실행
+    setupApp();
+
+    // 컴포넌트 언마운트 시 정리
+    return () => {
+      console.log('앱 정리 시작');
+      setUrlChangeHandler(() => {});
+      if (notificationSubscription) {
+        notificationSubscription.remove();
+      }
+      console.log('앱 정리 완료');
+    };
   }, []);
 
   const [webViewSource, setWebViewSource] = useState({
@@ -223,7 +326,7 @@ export default function WebViewScreen() {
         // console.error('웹 콘솔 에러:', data.log);
         return;
       } else if (data.type === 'JS_ERROR') {
-        console.error('웹 JS 에러:', data.error);
+        // console.error('웹 JS 에러:', data.error);
         return;
       }
 
