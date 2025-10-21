@@ -23,6 +23,21 @@ import {
   WebViewMessageEvent,
   WebViewNavigation,
 } from 'react-native-webview';
+import {
+  API,
+  BACK_BUTTON,
+  BASE_URL,
+  EXTERNAL_AUTH_DOMAINS,
+  EXTERNAL_URL_PATTERN,
+  INJECTED_JAVASCRIPT,
+  LOADING_INDICATOR_COLOR,
+  ORDER,
+  PG_DOMAINS,
+  UI_STYLE,
+  USER_AGENTS,
+  WEBVIEW_CONFIG,
+  WEB_MESSAGE_TYPES,
+} from '../constants/app-config';
 import { registerFcmToken, revokeFcmToken } from '../src/api/fcm';
 import {
   deleteDeviceToken,
@@ -54,10 +69,9 @@ export default function WebViewScreen() {
 
   // 플랫폼별 userAgent 설정
   const customUserAgent = Platform.select({
-    ios: 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1',
-    android:
-      'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.104 Mobile Safari/537.36',
-    default: 'Mozilla/5.0 Mobile',
+    ios: USER_AGENTS.IOS,
+    android: USER_AGENTS.ANDROID,
+    default: USER_AGENTS.DEFAULT,
   });
 
   const navigateToUrl = (url: string) => {
@@ -92,7 +106,7 @@ export default function WebViewScreen() {
           console.log('WebView 리로드 시도');
           webViewRef.current.reload();
         }
-      }, 300);
+      }, WEBVIEW_CONFIG.RELOAD_TIMEOUT);
     }
   };
 
@@ -153,9 +167,7 @@ export default function WebViewScreen() {
   // 토큰으로 자동로그인 페이지 호출
   useEffect(() => {
     if (!isLoggedIn && fcmToken && !autoLoginFiredRef.current) {
-      const url = `https://selftest.webin.co.kr/api/fcm/auto_login.php?fcm_token=${encodeURIComponent(
-        fcmToken,
-      )}`;
+      const url = `${API.AUTO_LOGIN}?fcm_token=${encodeURIComponent(fcmToken)}`;
       setWebViewSource({ uri: url }); // 네가 이미 가진 함수/상태
       console.log('Auto-login URL set:', url, fcmToken);
     }
@@ -228,16 +240,8 @@ export default function WebViewScreen() {
   }, []);
 
   const [webViewSource, setWebViewSource] = useState({
-    uri: 'https://selftest.webin.co.kr',
+    uri: BASE_URL,
   });
-
-  const PG_DOMAINS = [
-    'payment-gateway.tosspayments.com',
-    'payment-gateway-sandbox.tosspayments.com',
-    'tosspayments.com',
-  ];
-  const RETURN_OK = 'https://selftest.webin.co.kr/order/complete.php';
-  const RETURN_FAIL = 'https://selftest.webin.co.kr/order/fail.php';
 
   const isPgUrl = (url: string) => PG_DOMAINS.some((d) => url.includes(d));
 
@@ -246,15 +250,7 @@ export default function WebViewScreen() {
 
   // URL이 외부 인증(네이버/카카오) URL인지 확인하는 함수
   const isExternalAuthUrl = (url: string) => {
-    return (
-      url.includes('nid.naver.com') ||
-      url.includes('accounts.kakao.com') ||
-      url.includes('kauth.kakao.com') ||
-      url.includes('accounts.google.com') || // 구글 로그인
-      url.includes('appleid.apple.com') || // 애플 로그인
-      url.includes('idmsa.apple.com') || // 애플 인증 관련
-      url.includes('auth.apple.com')
-    );
+    return EXTERNAL_AUTH_DOMAINS.some((domain) => url.includes(domain));
   };
 
   const onNavChange = (nav: WebViewNavigation) => {
@@ -263,8 +259,8 @@ export default function WebViewScreen() {
     if (
       !nav.loading &&
       (isPgUrl(nav.url) ||
-        nav.url.startsWith(RETURN_OK) ||
-        nav.url.startsWith(RETURN_FAIL))
+        nav.url.startsWith(ORDER.COMPLETE) ||
+        nav.url.startsWith(ORDER.FAIL))
     ) {
       setIsLoading(false);
     }
@@ -319,22 +315,20 @@ export default function WebViewScreen() {
       const data = JSON.parse(event.nativeEvent.data);
       console.log('웹에서 메시지 수신:', data);
 
-      if (data.type === 'CONSOLE_LOG') {
+      if (data.type === WEB_MESSAGE_TYPES.CONSOLE_LOG) {
         console.log('웹 콘솔:', data.log);
         return;
-      } else if (data.type === 'CONSOLE_ERROR') {
-        // console.error('웹 콘솔 에러:', data.log);
+      } else if (data.type === WEB_MESSAGE_TYPES.CONSOLE_ERROR) {
         return;
-      } else if (data.type === 'JS_ERROR') {
-        // console.error('웹 JS 에러:', data.error);
+      } else if (data.type === WEB_MESSAGE_TYPES.JS_ERROR) {
         return;
       }
 
       switch (data.type) {
-        case 'OPEN_URL':
+        case WEB_MESSAGE_TYPES.OPEN_URL:
           if (data.url) Linking.openURL(data.url);
           break;
-        case 'LOGIN_OK':
+        case WEB_MESSAGE_TYPES.LOGIN_OK:
           setIsLoggedIn(true);
           if (fcmToken) {
             registerFcmToken(fcmToken)
@@ -343,7 +337,7 @@ export default function WebViewScreen() {
           }
           break;
 
-        case 'LOGOUT_OK':
+        case WEB_MESSAGE_TYPES.LOGOUT_OK:
           setIsLoggedIn(false);
           if (fcmToken) {
             console.log('revokeFcmToken', fcmToken);
@@ -360,98 +354,6 @@ export default function WebViewScreen() {
       console.log('메시지 처리 오류:', err);
     }
   };
-
-  // 웹뷰에 주입할 자바스크립트 코드
-  const INJECTED_JAVASCRIPT = `
-
-    // 원래 콘솔 메서드 저장
-      const originalConsole = {
-        log: console.log,
-        error: console.error,
-        warn: console.warn,
-        info: console.info
-      };
-
-    // 콘솔 메서드 오버라이드
-    console.log = function() {
-      originalConsole.log.apply(console, arguments);
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'CONSOLE_LOG',
-        log: Array.from(arguments).map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')
-      }));
-    };
-    
-    console.error = function() {
-      originalConsole.error.apply(console, arguments);
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'CONSOLE_ERROR',
-        log: Array.from(arguments).map(arg => typeof arg === 'object' ? JSON.stringify(arg) : arg).join(' ')
-      }));
-    };
-
-    window.onerror = function(message, source, lineno, colno, error) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'JS_ERROR',
-        error: { message, source, lineno, colno }
-      }));
-      return true;
-    };
-
-    window.isInApp = true;
-    window.sendToApp = function(data) {
-      window.ReactNativeWebView.postMessage(JSON.stringify(data));
-    };
-    
-    // 화면 크기 조정을 위한 meta 태그 추가
-    (function() {
-      var meta = document.createElement('meta');
-      meta.setAttribute('name', 'viewport');
-      meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
-      document.getElementsByTagName('head')[0].appendChild(meta);
-      
-      // 특정 로그인 페이지에 스타일 추가
-      if (window.location.href.includes('nid.naver.com') || 
-          window.location.href.includes('accounts.kakao.com') ||
-          window.location.href.includes('kauth.kakao.com') || 
-          window.location.href.includes('payment-gateway-sandbox.tosspayments.com') ||
-          window.location.href.includes('payment-gateway.tosspayments.com')) {
-        var styleElement = document.createElement('style');
-        styleElement.textContent = 'body { width: 100%; overflow-x: hidden; } div { max-width: 100%; }';
-        document.head.appendChild(styleElement);
-      }
-
-      // 파일 입력 필드 이벤트 모니터링
-      document.addEventListener('click', function(e) {
-        // 파일 입력 버튼 관련 요소 클릭 감지
-        if (e.target && (e.target.type === 'file' || 
-            e.target.closest('input[type="file"]') ||
-            e.target.getAttribute('role') === 'button' && e.target.closest('[data-role="upload"]'))) {
-          console.log('파일 입력 요소 클릭됨:', e.target);
-        }
-      }, true);
-
-      // 이미지 업로드 실패 확인을 위한 MutationObserver 설정
-      const observer = new MutationObserver(mutations => {
-        for (const mutation of mutations) {
-          if (mutation.type === 'childList' && mutation.addedNodes.length) {
-            const errorMessages = document.querySelectorAll('.error-message, .upload-error, [class*="error"]');
-            if (errorMessages.length) {
-              Array.from(errorMessages).forEach(el => {
-                if (el.offsetParent !== null) { // 화면에 표시된 요소만
-                  console.error('업로드 오류 메시지 발견:', el.textContent, el.className);
-                }
-              });
-            }
-          }
-        }
-      });
-      
-      observer.observe(document.body, { childList: true, subtree: true });
-
-
-    })();
-    true;
-  `;
 
   const showBackButton = canGoBack && isExternalAuthUrl(currentUrl);
 
@@ -492,17 +394,18 @@ export default function WebViewScreen() {
       return true;
     }
 
-    const external =
-      /^(tel:|mailto:|sms:|intent:|market:|kakaotalk:|kakaolink:|supertoss:|tdirectsdk:|ispmobile:|kftc-bankpay:|naversearchapp:|navercafe:)/i;
-    if (external.test(url) || url.includes('play.google.com/store')) {
+    if (
+      EXTERNAL_URL_PATTERN.test(url) ||
+      url.includes('play.google.com/store')
+    ) {
       openExternal(url);
       return false;
     }
 
     if (
       isPgUrl(url) ||
-      url.startsWith(RETURN_OK) ||
-      url.startsWith(RETURN_FAIL)
+      url.startsWith(ORDER.COMPLETE) ||
+      url.startsWith(ORDER.FAIL)
     ) {
       setIsLoading(true);
     }
@@ -608,7 +511,11 @@ export default function WebViewScreen() {
                   webViewRef.current?.goBack();
                 }}
               >
-                <Ionicons name="chevron-back" size={24} color="#fff" />
+                <Ionicons
+                  name="chevron-back"
+                  size={24}
+                  color={BACK_BUTTON.ICON_COLOR}
+                />
               </TouchableOpacity>
             )}
         </>
@@ -616,7 +523,7 @@ export default function WebViewScreen() {
 
       {isLoading && (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#11412D" />
+          <ActivityIndicator size="large" color={LOADING_INDICATOR_COLOR} />
         </View>
       )}
     </View>
@@ -638,7 +545,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    backgroundColor: UI_STYLE.LOADING_BG_COLOR,
   },
   errorContainer: {
     flex: 1,
@@ -648,17 +555,17 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: 'red',
+    color: UI_STYLE.ERROR_TEXT_COLOR,
     textAlign: 'center',
   },
   backButtonTopLeft: {
     position: 'absolute',
     top: 10,
     left: 10,
-    backgroundColor: '#555',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    backgroundColor: BACK_BUTTON.BACKGROUND_COLOR,
+    width: BACK_BUTTON.SIZE,
+    height: BACK_BUTTON.SIZE,
+    borderRadius: BACK_BUTTON.BORDER_RADIUS,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
