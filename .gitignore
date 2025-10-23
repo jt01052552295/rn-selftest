@@ -33,6 +33,12 @@ key.properties
 *.iml
 *.hprof
 .cxx/
+# Keystore files
+*.jks
+*.keystore
+!debug.keystore
+# Gradle properties with sensitive data
+android/gradle.properties
 
 # dependencies
 node_modules/
