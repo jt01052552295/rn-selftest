@@ -9,8 +9,9 @@ export const BASE_URL = 'https://selftest.webin.co.kr';
 
 // API 관련 URL
 export const API = {
-  // 자동 로그인 엔드포인트
   AUTO_LOGIN: `${BASE_URL}/api/fcm/auto_login.php`,
+  REGISTER: `${BASE_URL}/api/fcm/register.php`,
+  REVOKE: `${BASE_URL}/api/fcm/revoke.php`,
 };
 
 // 결제 관련 URL

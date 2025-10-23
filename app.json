@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "브레인톡",
+    "name": "브레인톡톡",
     "slug": "selftestapp",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -19,7 +19,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#D8EEEE",
+        "backgroundColor": "#ffe309",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -49,9 +49,9 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#ffe309",
           "dark": {
-            "backgroundColor": "#ffffff"
+            "backgroundColor": "#ffe309"
           }
         }
       ],

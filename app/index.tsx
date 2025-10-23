@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   BackHandler,
   Keyboard,
   Linking,
@@ -299,7 +300,25 @@ export default function WebViewScreen() {
           webViewRef.current.goBack();
           return true;
         }
-        return false; // 루트면 기본 동작(앱 종료)
+
+        Alert.alert(
+          '알림',
+          '확인을 누르면 앱이 종료됩니다.',
+          [
+            {
+              text: '취소',
+              onPress: () => {},
+              style: 'cancel',
+            },
+            {
+              text: '확인',
+              onPress: () => BackHandler.exitApp(),
+              style: 'destructive',
+            },
+          ],
+          { cancelable: true },
+        );
+        return true; // 기본 동작을 막고 우리가 처리
       };
       const sub = BackHandler.addEventListener(
         'hardwareBackPress',
