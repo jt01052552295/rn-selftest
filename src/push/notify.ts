@@ -138,6 +138,11 @@ export async function initNotifications() {
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
         sound: 'default',
+        lockscreenVisibility:
+          Notifications.AndroidNotificationVisibility.PUBLIC,
+        showBadge: true,
+        enableLights: true,
+        enableVibrate: true,
       });
     }
 
