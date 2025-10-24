@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import NetInfo from '@react-native-community/netinfo';
 import { useFocusEffect } from '@react-navigation/native';
 import { Audio } from 'expo-av';
 import * as Location from 'expo-location';
@@ -58,6 +59,7 @@ export default function WebViewScreen() {
   const [error, setError] = useState<string | null>(null);
   const webViewRef = useRef<WebView>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [isConnected, setIsConnected] = useState(true);
 
   const autoLoginFiredRef = useRef(false);
   const [fcmToken, setFcmToken] = useState<string | null>(null);
@@ -129,6 +131,18 @@ export default function WebViewScreen() {
     return () => {
       keyboardDidShowListener.remove();
       keyboardDidHideListener.remove();
+    };
+  }, []);
+
+  // 네트워크 상태 감지
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      console.log('네트워크 연결 상태:', state.isConnected);
+      setIsConnected(state.isConnected ?? true);
+    });
+
+    return () => {
+      unsubscribe();
     };
   }, []);
 
@@ -443,7 +457,36 @@ export default function WebViewScreen() {
     >
       <StatusBar style="light" />
 
-      {error ? (
+      {!isConnected ? (
+        <View style={styles.noConnectionContainer}>
+          <Ionicons
+            name="cloud-offline-outline"
+            size={80}
+            color="#999"
+            style={{ marginBottom: 20 }}
+          />
+          <Text style={styles.noConnectionTitle}>
+            인터넷 연결이 끊어졌습니다.
+          </Text>
+          <Text style={styles.noConnectionText}>
+            네트워크 연결을 확인하고{'\n'}다시 시도해주세요.
+          </Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => {
+              NetInfo.fetch().then((state) => {
+                setIsConnected(state.isConnected ?? true);
+                if (state.isConnected) {
+                  webViewRef.current?.reload();
+                }
+              });
+            }}
+          >
+            <Ionicons name="refresh" size={20} color="#fff" />
+            <Text style={styles.retryButtonText}>다시 시도</Text>
+          </TouchableOpacity>
+        </View>
+      ) : error ? (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>
             연결 오류가 발생했습니다. 다시 시도해주세요.
@@ -576,6 +619,41 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: UI_STYLE.ERROR_TEXT_COLOR,
     textAlign: 'center',
+  },
+  noConnectionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    backgroundColor: '#f5f5f5',
+  },
+  noConnectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  noConnectionText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 30,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   backButtonTopLeft: {
     position: 'absolute',
