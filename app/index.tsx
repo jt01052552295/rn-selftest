@@ -25,6 +25,7 @@ import {
   WebViewMessageEvent,
   WebViewNavigation,
 } from 'react-native-webview';
+import UpdateModal from '../components/UpdateModal';
 import {
   API,
   BACK_BUTTON,
@@ -42,6 +43,11 @@ import {
 } from '../constants/app-config';
 import { registerFcmToken, revokeFcmToken } from '../src/api/fcm';
 import {
+  checkAppVersion,
+  compareVersions,
+  getPlatformVersionInfo,
+} from '../src/api/version';
+import {
   deleteDeviceToken,
   initFcm,
   listenForegroundMessages,
@@ -54,12 +60,23 @@ import {
   showLocalNotification,
 } from '../src/push/notify';
 
+// 앱 버전 (package.json과 동기화)
+const APP_VERSION = '1.0.0';
+
 export default function WebViewScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const webViewRef = useRef<WebView>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
+
+  // 버전 업데이트 모달 관련 상태
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [updateRequired, setUpdateRequired] = useState(false);
+  const [latestVersion, setLatestVersion] = useState('');
+  const [updateMessage, setUpdateMessage] = useState('');
+  const [storeAppUrl, setStoreAppUrl] = useState('');
+  const [storeWebUrl, setStoreWebUrl] = useState('');
 
   const autoLoginFiredRef = useRef(false);
   const [fcmToken, setFcmToken] = useState<string | null>(null);
@@ -132,6 +149,53 @@ export default function WebViewScreen() {
       keyboardDidShowListener.remove();
       keyboardDidHideListener.remove();
     };
+  }, []);
+
+  // 앱 버전 체크
+  useEffect(() => {
+    async function performVersionCheck() {
+      try {
+        console.log('=== 버전 체크 시작 ===');
+        console.log('현재 앱 버전:', APP_VERSION);
+
+        const versionData = await checkAppVersion();
+        console.log('서버 응답:', JSON.stringify(versionData, null, 2));
+
+        if (!versionData.success) {
+          console.log('버전 체크 실패:', versionData.msg);
+          return;
+        }
+
+        const platformInfo = getPlatformVersionInfo(versionData);
+        console.log('플랫폼 정보:', JSON.stringify(platformInfo, null, 2));
+
+        const needsUpdate = compareVersions(APP_VERSION, platformInfo.ver);
+        console.log('버전 비교 결과:', needsUpdate);
+
+        if (needsUpdate === 1) {
+          // 업데이트 필요
+          console.log(
+            `✅ 업데이트 필요: ${APP_VERSION} -> ${platformInfo.ver}`,
+          );
+          console.log(
+            '업데이트 타입:',
+            platformInfo.update === 2 ? '필수' : '선택',
+          );
+          setLatestVersion(platformInfo.ver);
+          setUpdateRequired(platformInfo.update === 2); // 2: 필수, 1: 선택
+          setUpdateMessage(platformInfo.message);
+          setStoreAppUrl(platformInfo.store.app);
+          setStoreWebUrl(platformInfo.store.web);
+          setShowUpdateModal(true);
+        } else {
+          console.log('❌ 최신 버전 사용 중 (업데이트 불필요)');
+        }
+      } catch (error) {
+        console.error('❌ 버전 체크 중 오류:', error);
+      }
+    }
+
+    performVersionCheck();
   }, []);
 
   // 네트워크 상태 감지
@@ -588,6 +652,18 @@ export default function WebViewScreen() {
           <ActivityIndicator size="large" color={LOADING_INDICATOR_COLOR} />
         </View>
       )}
+
+      {/* 업데이트 모달 */}
+      <UpdateModal
+        visible={showUpdateModal}
+        required={updateRequired}
+        currentVersion={APP_VERSION}
+        latestVersion={latestVersion}
+        message={updateMessage}
+        storeAppUrl={storeAppUrl}
+        storeWebUrl={storeWebUrl}
+        onClose={() => setShowUpdateModal(false)}
+      />
     </View>
   );
 }

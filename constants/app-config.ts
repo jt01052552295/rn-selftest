@@ -12,6 +12,8 @@ export const API = {
   AUTO_LOGIN: `${BASE_URL}/api/fcm/auto_login.php`,
   REGISTER: `${BASE_URL}/api/fcm/register.php`,
   REVOKE: `${BASE_URL}/api/fcm/revoke.php`,
+
+  APP_VERSION_CHECK: `${BASE_URL}/api/app_version_check.php`,
 };
 
 // 결제 관련 URL
