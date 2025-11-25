@@ -5,7 +5,7 @@
 
 // ===== URL 관련 상수 =====
 // 기본 도메인 URL
-export const BASE_URL = 'https://selftest.webin.co.kr';
+export const BASE_URL = 'https://goldenbraincare.com';
 
 // API 관련 URL
 export const API = {
